@@ -231,10 +231,30 @@ async function main(){
       function HUD(t){ ctx.fillText(t,20,yHUD); yHUD+=18;}
 
       HUD("=== GARBHA ANALYSIS ===");
+
+      // TANGAN
       HUD(`Tangan Kanan: ${handR.toFixed(1)} cm`);
       HUD(`Tangan Kiri : ${handL.toFixed(1)} cm`);
       HUD(`Siku Kanan: ${angleER.toFixed(1)}°`);
       HUD(`Siku Kiri : ${angleEL.toFixed(1)}°`);
+      
+      // KAKI
+      HUD(`Kaki Kanan: ${legR.toFixed(1)} cm`);
+      HUD(`Kaki Kiri : ${legL.toFixed(1)} cm`);
+      HUD(`Lutut Kanan: ${angleKR.toFixed(1)}°`);
+      HUD(`Lutut Kiri : ${angleKL.toFixed(1)}°`);
+      
+      // ================= FULL BODY =================
+      HUD("---- FULL BODY ----");
+      HUD(`Lebar Bahu: ${shoulderWidth.toFixed(1)} cm`);
+      HUD(`Lebar Pinggul: ${hipWidth.toFixed(1)} cm`);
+      HUD(`Tinggi Badan: ${bodyHeight.toFixed(1)} cm`);
+      
+      // ================= KEMIRINGAN =================
+      HUD("---- KEMIRINGAN ----");
+      HUD(`Bahu: ${tiltShoulder.toFixed(1)}°`);
+      HUD(`Pinggul: ${tiltHip.toFixed(1)}°`);
+      HUD(`Tubuh: ${tiltBody.toFixed(1)}°`);
 
       lastFrameImage = canvas.toDataURL("image/jpeg",0.9);
 
