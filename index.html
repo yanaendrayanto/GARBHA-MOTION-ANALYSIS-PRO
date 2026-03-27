@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>GARBHA MOTION ANALYSIS PRO</title>
+  <title>GARBHA MOTION ANALYSIS PRO+</title>
 
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.13.0"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
@@ -54,6 +54,15 @@ const startBtn = document.getElementById('startBtn');
 
 let detector;
 
+// ================= STABILIZER =================
+let smoothData = {};
+
+function smooth(name, value){
+  if(!smoothData[name]) smoothData[name] = value;
+  smoothData[name] = smoothData[name] * 0.7 + value * 0.3;
+  return smoothData[name];
+}
+
 // ================= CAMERA =================
 async function setupCamera(){
   const stream = await navigator.mediaDevices.getUserMedia({
@@ -89,7 +98,7 @@ function drawLine(a,b){
   ctx.beginPath();
   ctx.moveTo(canvas.width-a.x,a.y);
   ctx.lineTo(canvas.width-b.x,b.y);
-  ctx.strokeStyle="cyan"; // 🔵 biru
+  ctx.strokeStyle="cyan";
   ctx.lineWidth=3;
   ctx.stroke();
 }
@@ -99,9 +108,7 @@ function drawPoint(p){
   ctx.arc(canvas.width-p.x,p.y,5,0,Math.PI*2);
   ctx.fillStyle="blue";
   ctx.fill();
-
   ctx.strokeStyle="white";
-  ctx.lineWidth=1;
   ctx.stroke();
 }
 
@@ -137,74 +144,73 @@ async function main(){
         return pose.keypoints.find(k=>k.name===name && k.score>0.4);
       }
 
-      // ================= POINTS =================
-      const points = pose.keypoints.filter(k=>k.score>0.4);
+      const kp = pose.keypoints;
 
-      // ================= SKELETON =================
-      const shoulderR = P("right_shoulder");
-      const elbowR = P("right_elbow");
-      const wristR = P("right_wrist");
+      // ================= FULL BODY CONNECTION =================
+      const pairs = [
+        ["nose","left_eye"],["nose","right_eye"],
+        ["left_shoulder","right_shoulder"],
+        ["left_shoulder","left_elbow"],
+        ["left_elbow","left_wrist"],
+        ["right_shoulder","right_elbow"],
+        ["right_elbow","right_wrist"],
+        ["left_shoulder","left_hip"],
+        ["right_shoulder","right_hip"],
+        ["left_hip","right_hip"],
+        ["left_hip","left_knee"],
+        ["left_knee","left_ankle"],
+        ["right_hip","right_knee"],
+        ["right_knee","right_ankle"]
+      ];
 
-      const shoulderL = P("left_shoulder");
-      const elbowL = P("left_elbow");
-      const wristL = P("left_wrist");
-
-      const hipR = P("right_hip");
-      const kneeR = P("right_knee");
-      const ankleR = P("right_ankle");
-
-      const hipL = P("left_hip");
-      const kneeL = P("left_knee");
-      const ankleL = P("left_ankle");
-
-      // ================= DRAW LINES =================
-      if(shoulderR && elbowR) drawLine(shoulderR, elbowR);
-      if(elbowR && wristR) drawLine(elbowR, wristR);
-
-      if(shoulderL && elbowL) drawLine(shoulderL, elbowL);
-      if(elbowL && wristL) drawLine(elbowL, wristL);
-
-      if(hipR && kneeR) drawLine(hipR, kneeR);
-      if(kneeR && ankleR) drawLine(kneeR, ankleR);
-
-      if(hipL && kneeL) drawLine(hipL, kneeL);
-      if(kneeL && ankleL) drawLine(kneeL, ankleL);
-
-      // ================= DRAW ALL POINTS =================
-      points.forEach(p=>{
-        drawPoint(p);
+      pairs.forEach(([a,b])=>{
+        const p1 = P(a);
+        const p2 = P(b);
+        if(p1 && p2) drawLine(p1,p2);
       });
 
-      // ================= ANGLE =================
+      // ================= DRAW POINTS =================
+      kp.forEach(p=>{
+        if(p.score>0.4) drawPoint(p);
+      });
+
+      // ================= ANGLE STABLE =================
       let info = "";
 
-      if(shoulderR && elbowR && wristR){
-        const angle = getAngle(shoulderR, elbowR, wristR);
+      const shoulder = P("right_shoulder");
+      const elbow = P("right_elbow");
+      const wrist = P("right_wrist");
+
+      if(shoulder && elbow && wrist){
+        let angle = getAngle(shoulder, elbow, wrist);
+        angle = smooth("elbowAngle", angle);
+
         ctx.fillStyle="yellow";
         ctx.font="16px monospace";
-        ctx.fillText(angle.toFixed(1)+"°", canvas.width-elbowR.x, elbowR.y);
-        info += "Right Elbow: "+angle.toFixed(1)+"°<br>";
+        ctx.fillText(angle.toFixed(1)+"°", canvas.width-elbow.x, elbow.y);
+
+        info += "Elbow: "+angle.toFixed(1)+"°<br>";
       }
 
-      if(hipR && kneeR && ankleR){
-        const angle = getAngle(hipR, kneeR, ankleR);
-        ctx.fillText(angle.toFixed(1)+"°", canvas.width-kneeR.x, kneeR.y);
-        info += "Right Knee: "+angle.toFixed(1)+"°<br>";
-      }
+      // ================= CM STABLE =================
+      const sL = P("left_shoulder");
+      const sR = P("right_shoulder");
 
-      // ================= CM ESTIMATION =================
-      if(shoulderL && shoulderR){
-        const pixel = getDistance(shoulderL, shoulderR);
+      if(sL && sR && elbow && wrist){
+        let pixel = getDistance(sL, sR);
+        pixel = smooth("shoulderWidth", pixel);
+
         const scale = 40 / pixel;
 
-        if(elbowR && wristR){
-          const dist = getDistance(elbowR, wristR);
-          const cm = dist * scale;
+        let dist = getDistance(elbow, wrist);
+        dist = smooth("forearmDist", dist);
 
-          ctx.fillStyle="cyan";
-          ctx.fillText(cm.toFixed(1)+" cm", canvas.width-wristR.x, wristR.y+15);
-          info += "Forearm: "+cm.toFixed(1)+" cm<br>";
-        }
+        const cm = dist * scale;
+
+        ctx.fillStyle="cyan";
+        ctx.fillText(cm.toFixed(1)+" cm", canvas.width-wrist.x, wrist.y+15);
+
+        info += "Forearm: "+cm.toFixed(1)+" cm<br>";
       }
 
       hud.innerHTML = info;
