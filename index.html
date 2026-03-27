@@ -54,7 +54,7 @@ let detector;
 let records = [];
 let lastFrameImage = null;
 
-// ================= CAMERA =================
+// CAMERA
 async function setupCamera(){
   const stream = await navigator.mediaDevices.getUserMedia({
     video:{width:1280,height:720,facingMode:"user"}
@@ -65,7 +65,7 @@ async function setupCamera(){
   });
 }
 
-// ================= MATH =================
+// MATH
 function getAngle(A,B,C){
   const AB = {x:A.x-B.x, y:A.y-B.y};
   const CB = {x:C.x-B.x, y:C.y-B.y};
@@ -79,7 +79,7 @@ function getDistance(a,b){
   return Math.hypot(a.x-b.x, a.y-b.y);
 }
 
-// ================= DRAW =================
+// DRAW
 function drawLine(a,b){
   ctx.beginPath();
   ctx.moveTo(canvas.width-a.x,a.y);
@@ -98,7 +98,7 @@ function drawPoint(p){
   ctx.stroke();
 }
 
-// ================= SCREENSHOT =================
+// SCREENSHOT
 shotBtn.onclick = ()=>{
   if(!lastFrameImage) return alert("Belum ada frame");
   const a = document.createElement("a");
@@ -107,7 +107,7 @@ shotBtn.onclick = ()=>{
   a.click();
 };
 
-// ================= PDF =================
+// PDF
 pdfBtn.onclick = ()=>{
   if(!lastFrameImage) return alert("Belum ada data");
 
@@ -129,7 +129,7 @@ pdfBtn.onclick = ()=>{
   doc.save("garbha_report.pdf");
 };
 
-// ================= MAIN =================
+// MAIN
 async function main(){
 
   await setupCamera();
@@ -194,25 +194,29 @@ async function main(){
       const hR=P("right_hip"), kR=P("right_knee"), aR=P("right_ankle");
       const hL=P("left_hip"), kL=P("left_knee"), aL=P("left_ankle");
 
-      // skala
       let scale = 1;
       if(sL && sR){
         scale = 40 / getDistance(sL, sR);
       }
 
-      // ukuran
       const handR = eR&&wR ? getDistance(eR,wR)*scale : 0;
       const handL = eL&&wL ? getDistance(eL,wL)*scale : 0;
       const legR = kR&&aR ? getDistance(kR,aR)*scale : 0;
       const legL = kL&&aL ? getDistance(kL,aL)*scale : 0;
 
-      // sudut
+      const torso = sR&&hR ? getDistance(sR,hR)*scale : 0;
+
       const angleER = sR&&eR&&wR ? getAngle(sR,eR,wR) : 0;
       const angleEL = sL&&eL&&wL ? getAngle(sL,eL,wL) : 0;
       const angleKR = hR&&kR&&aR ? getAngle(hR,kR,aR) : 0;
       const angleKL = hL&&kL&&aL ? getAngle(hL,kL,aL) : 0;
 
-      // ================= LABEL DI SKELETON =================
+      let tilt = 0;
+      if(sL && sR){
+        tilt = Math.atan2(sR.y - sL.y, sR.x - sL.x) * 180/Math.PI;
+      }
+
+      // LABEL SKELETON
       ctx.fillStyle="yellow";
       ctx.font="12px monospace";
 
@@ -226,9 +230,26 @@ async function main(){
       if(aR) ctx.fillText(legR.toFixed(1)+"cm", canvas.width-aR.x, aR.y+15);
       if(aL) ctx.fillText(legL.toFixed(1)+"cm", canvas.width-aL.x, aL.y+15);
 
-      // simpan
-      records.push({handR,handL,legR,legL});
+      // HUD KIRI (INI YANG KEMARIN HILANG 🔥)
+      ctx.fillStyle="white";
+      ctx.font="14px monospace";
 
+      let yHUD = 20;
+      function HUD(t){ ctx.fillText(t,20,yHUD); yHUD+=18; }
+
+      HUD("=== GARBHA ANALYSIS ===");
+      HUD(`Tangan Kanan: ${handR.toFixed(1)} cm`);
+      HUD(`Tangan Kiri : ${handL.toFixed(1)} cm`);
+      HUD(`Sudut Siku Kanan: ${angleER.toFixed(1)}°`);
+      HUD(`Sudut Siku Kiri : ${angleEL.toFixed(1)}°`);
+      HUD(`Kaki Kanan: ${legR.toFixed(1)} cm`);
+      HUD(`Kaki Kiri : ${legL.toFixed(1)} cm`);
+      HUD(`Sudut Lutut Kanan: ${angleKR.toFixed(1)}°`);
+      HUD(`Sudut Lutut Kiri : ${angleKL.toFixed(1)}°`);
+      HUD(`Tinggi Torso: ${torso.toFixed(1)} cm`);
+      HUD(`Kemiringan Tubuh: ${tilt.toFixed(1)}°`);
+
+      records.push({handR,handL,legR,legL});
       lastFrameImage = canvas.toDataURL("image/jpeg",0.9);
 
     });
