@@ -84,7 +84,6 @@ function getDistance(a,b){
   return Math.hypot(a.x-b.x, a.y-b.y);
 }
 
-// ================= DRAW =================
 function drawLine(a,b){
   ctx.beginPath();
   ctx.moveTo(canvas.width-a.x,a.y);
@@ -164,35 +163,6 @@ async function main(){
         return pose.keypoints.find(k=>k.name===name && k.score>0.4);
       }
 
-      const kp = pose.keypoints;
-
-      // ================= 🔥 SKELETON BALIK =================
-      const pairs = [
-        ["left_shoulder","right_shoulder"],
-        ["left_shoulder","left_elbow"],
-        ["left_elbow","left_wrist"],
-        ["right_shoulder","right_elbow"],
-        ["right_elbow","right_wrist"],
-        ["left_hip","right_hip"],
-        ["left_shoulder","left_hip"],
-        ["right_shoulder","right_hip"],
-        ["left_hip","left_knee"],
-        ["left_knee","left_ankle"],
-        ["right_hip","right_knee"],
-        ["right_knee","right_ankle"]
-      ];
-
-      pairs.forEach(([a,b])=>{
-        const p1 = P(a);
-        const p2 = P(b);
-        if(p1 && p2) drawLine(p1,p2);
-      });
-
-      kp.forEach(p=>{
-        if(p.score>0.4) drawPoint(p);
-      });
-
-      // ================= DATA =================
       const sR=P("right_shoulder"), eR=P("right_elbow"), wR=P("right_wrist");
       const sL=P("left_shoulder"), eL=P("left_elbow"), wL=P("left_wrist");
       const hR=P("right_hip"), kR=P("right_knee"), aR=P("right_ankle");
@@ -211,17 +181,30 @@ async function main(){
       let angleKR = hR&&kR&&aR ? getAngle(hR,kR,aR) : 0;
       let angleKL = hL&&kL&&aL ? getAngle(hL,kL,aL) : 0;
 
-      // ================= LABEL DI SKELETON =================
-      ctx.fillStyle="yellow";
-      ctx.font="12px monospace";
+      // ================= FULL BODY (DITAMBAHKAN) =================
+      let shoulderWidth = (sL && sR) ? getDistance(sL, sR) * scale : 0;
+      let hipWidth = (hL && hR) ? getDistance(hL, hR) * scale : 0;
 
-      if(eR) ctx.fillText(angleER.toFixed(1)+"°", canvas.width-eR.x, eR.y-10);
-      if(eL) ctx.fillText(angleEL.toFixed(1)+"°", canvas.width-eL.x, eL.y-10);
-      if(kR) ctx.fillText(angleKR.toFixed(1)+"°", canvas.width-kR.x, kR.y-10);
-      if(kL) ctx.fillText(angleKL.toFixed(1)+"°", canvas.width-kL.x, kL.y-10);
+      let bodyHeight = 0;
+      if(nose && aR && aL){
+        const ankleMid = {x:(aR.x+aL.x)/2, y:(aR.y+aL.y)/2};
+        bodyHeight = getDistance(nose, ankleMid) * scale;
+      }
 
-      if(wR) ctx.fillText(handR.toFixed(1)+"cm", canvas.width-wR.x, wR.y+15);
-      if(wL) ctx.fillText(handL.toFixed(1)+"cm", canvas.width-wL.x, wL.y+15);
+      let tiltShoulder = (sL && sR)
+        ? Math.atan2(sR.y - sL.y, sR.x - sL.x) * 180/Math.PI
+        : 0;
+
+      let tiltHip = (hL && hR)
+        ? Math.atan2(hR.y - hL.y, hR.x - hL.x) * 180/Math.PI
+        : 0;
+
+      let tiltBody = 0;
+      if(sL && sR && hL && hR){
+        const ms = {x:(sL.x+sR.x)/2,y:(sL.y+sR.y)/2};
+        const mh = {x:(hL.x+hR.x)/2,y:(hL.y+hR.y)/2};
+        tiltBody = Math.atan2(mh.y-ms.y,mh.x-ms.x)*180/Math.PI;
+      }
 
       // ================= HUD =================
       ctx.fillStyle="white";
@@ -232,25 +215,21 @@ async function main(){
 
       HUD("=== GARBHA ANALYSIS ===");
 
-      // TANGAN
       HUD(`Tangan Kanan: ${handR.toFixed(1)} cm`);
       HUD(`Tangan Kiri : ${handL.toFixed(1)} cm`);
       HUD(`Siku Kanan: ${angleER.toFixed(1)}°`);
       HUD(`Siku Kiri : ${angleEL.toFixed(1)}°`);
-      
-      // KAKI
+
       HUD(`Kaki Kanan: ${legR.toFixed(1)} cm`);
       HUD(`Kaki Kiri : ${legL.toFixed(1)} cm`);
       HUD(`Lutut Kanan: ${angleKR.toFixed(1)}°`);
       HUD(`Lutut Kiri : ${angleKL.toFixed(1)}°`);
-      
-      // ================= FULL BODY =================
+
       HUD("---- FULL BODY ----");
       HUD(`Lebar Bahu: ${shoulderWidth.toFixed(1)} cm`);
       HUD(`Lebar Pinggul: ${hipWidth.toFixed(1)} cm`);
       HUD(`Tinggi Badan: ${bodyHeight.toFixed(1)} cm`);
-      
-      // ================= KEMIRINGAN =================
+
       HUD("---- KEMIRINGAN ----");
       HUD(`Bahu: ${tiltShoulder.toFixed(1)}°`);
       HUD(`Pinggul: ${tiltHip.toFixed(1)}°`);
