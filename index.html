@@ -35,9 +35,9 @@
       cursor:pointer;
       z-index:10;
     }
-    #startBtn{left:30%;}
-    #pdfBtn{left:50%;}
-    #shotBtn{left:70%;}
+    #startBtn{left:25%;}
+    #pdfBtn{left:45%;}
+    #shotBtn{left:65%;}
   </style>
 </head>
 
@@ -86,6 +86,10 @@ function getAngle(A,B,C){
   return Math.acos(dot/(magAB*magCB)) * 180/Math.PI;
 }
 
+function getDistance(a,b){
+  return Math.hypot(a.x-b.x, a.y-b.y);
+}
+
 // ================= DRAW =================
 function drawLine(a,b){
   ctx.beginPath();
@@ -108,7 +112,6 @@ function drawPoint(p){
 // ================= SCREENSHOT =================
 shotBtn.onclick = ()=>{
   if(!lastFrameImage) return alert("Belum ada frame");
-
   const a = document.createElement("a");
   a.href = lastFrameImage;
   a.download = "garbha_screenshot.jpg";
@@ -127,14 +130,13 @@ pdfBtn.onclick = ()=>{
   let y = 20;
   records.slice(-10).forEach(r=>{
     doc.text(
-      `ER:${r.elbowR.toFixed(1)} EL:${r.elbowL.toFixed(1)} KR:${r.kneeR.toFixed(1)} KL:${r.kneeL.toFixed(1)}`,
+      `TR:${r.handR} TL:${r.handL} KR:${r.legR} KL:${r.legL}`,
       10, y
     );
     y += 6;
   });
 
   doc.addImage(lastFrameImage, "JPEG", 10, y+5, 180, 100);
-
   doc.save("garbha_report.pdf");
 };
 
@@ -197,40 +199,62 @@ async function main(){
         if(p.score>0.4) drawPoint(p);
       });
 
-      // angles
-      let ER=0, EL=0, KR=0, KL=0;
-
+      // ambil titik
       const sR=P("right_shoulder"), eR=P("right_elbow"), wR=P("right_wrist");
       const sL=P("left_shoulder"), eL=P("left_elbow"), wL=P("left_wrist");
       const hR=P("right_hip"), kR=P("right_knee"), aR=P("right_ankle");
       const hL=P("left_hip"), kL=P("left_knee"), aL=P("left_ankle");
 
-      if(sR&&eR&&wR) ER=getAngle(sR,eR,wR);
-      if(sL&&eL&&wL) EL=getAngle(sL,eL,wL);
-      if(hR&&kR&&aR) KR=getAngle(hR,kR,aR);
-      if(hL&&kL&&aL) KL=getAngle(hL,kL,aL);
+      // skala cm
+      let scale = 1;
+      if(sL && sR){
+        scale = 40 / getDistance(sL, sR);
+      }
 
-      ctx.fillStyle="yellow";
-      ctx.font="16px monospace";
+      // ukuran
+      const handR = eR && wR ? getDistance(eR,wR)*scale : 0;
+      const handL = eL && wL ? getDistance(eL,wL)*scale : 0;
+      const legR = kR && aR ? getDistance(kR,aR)*scale : 0;
+      const legL = kL && aL ? getDistance(kL,aL)*scale : 0;
 
-      if(eR) ctx.fillText(ER.toFixed(1)+"°", canvas.width-eR.x, eR.y);
-      if(eL) ctx.fillText(EL.toFixed(1)+"°", canvas.width-eL.x, eL.y);
-      if(kR) ctx.fillText(KR.toFixed(1)+"°", canvas.width-kR.x, kR.y);
-      if(kL) ctx.fillText(KL.toFixed(1)+"°", canvas.width-kL.x, kL.y);
+      const torso = sR && hR ? getDistance(sR,hR)*scale : 0;
 
-      records.push({
-        elbowR:ER, elbowL:EL, kneeR:KR, kneeL:KL
-      });
+      // sudut
+      const angleER = sR&&eR&&wR ? getAngle(sR,eR,wR) : 0;
+      const angleEL = sL&&eL&&wL ? getAngle(sL,eL,wL) : 0;
+      const angleKR = hR&&kR&&aR ? getAngle(hR,kR,aR) : 0;
+      const angleKL = hL&&kL&&aL ? getAngle(hL,kL,aL) : 0;
 
-      // 🔥 simpan frame terakhir (INI KUNCI FIX SCREENSHOT)
-      lastFrameImage = canvas.toDataURL("image/jpeg", 0.9);
+      // kemiringan
+      let tilt = 0;
+      if(sL && sR){
+        tilt = Math.atan2(sR.y - sL.y, sR.x - sL.x) * 180/Math.PI;
+      }
 
-      hud.innerHTML = `
-        ER:${ER.toFixed(1)}°<br>
-        EL:${EL.toFixed(1)}°<br>
-        KR:${KR.toFixed(1)}°<br>
-        KL:${KL.toFixed(1)}°
-      `;
+      // TEXT DI CANVAS (INI MASUK KE SCREENSHOT 🔥)
+      ctx.fillStyle="white";
+      ctx.font="14px monospace";
+
+      let y = 20;
+      function t(txt){ ctx.fillText(txt,20,y); y+=18;}
+
+      t("=== GARBHA ANALYSIS ===");
+      t(`Tangan Kanan: ${handR.toFixed(1)} cm`);
+      t(`Tangan Kiri : ${handL.toFixed(1)} cm`);
+      t(`Siku Kanan: ${angleER.toFixed(1)}°`);
+      t(`Siku Kiri : ${angleEL.toFixed(1)}°`);
+      t(`Kaki Kanan: ${legR.toFixed(1)} cm`);
+      t(`Kaki Kiri : ${legL.toFixed(1)} cm`);
+      t(`Lutut Kanan: ${angleKR.toFixed(1)}°`);
+      t(`Lutut Kiri : ${angleKL.toFixed(1)}°`);
+      t(`Torso: ${torso.toFixed(1)} cm`);
+      t(`Kemiringan: ${tilt.toFixed(1)}°`);
+
+      // simpan data
+      records.push({handR,handL,legR,legL});
+
+      // simpan frame
+      lastFrameImage = canvas.toDataURL("image/jpeg",0.9);
 
     });
 
