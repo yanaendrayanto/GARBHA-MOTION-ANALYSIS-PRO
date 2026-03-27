@@ -16,15 +16,6 @@
       object-fit:contain;
     }
     video{transform:scaleX(-1);}
-    #hud{
-      position:fixed;
-      top:20px; left:20px;
-      color:#00ffff;
-      font-family:monospace;
-      background:rgba(0,0,0,0.4);
-      padding:10px;
-      border-radius:10px;
-    }
     button{
       position:fixed;
       bottom:20px;
@@ -45,7 +36,6 @@
 
 <video id="video" autoplay playsinline muted></video>
 <canvas id="canvas"></canvas>
-<div id="hud">Loading...</div>
 
 <button id="startBtn">START</button>
 <button id="pdfBtn">EXPORT PDF</button>
@@ -56,7 +46,6 @@ const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
-const hud = document.getElementById('hud');
 const startBtn = document.getElementById('startBtn');
 const pdfBtn = document.getElementById('pdfBtn');
 const shotBtn = document.getElementById('shotBtn');
@@ -130,7 +119,7 @@ pdfBtn.onclick = ()=>{
   let y = 20;
   records.slice(-10).forEach(r=>{
     doc.text(
-      `TR:${r.handR} TL:${r.handL} KR:${r.legR} KL:${r.legL}`,
+      `TR:${r.handR.toFixed(1)} TL:${r.handL.toFixed(1)} KR:${r.legR.toFixed(1)} KL:${r.legL.toFixed(1)}`,
       10, y
     );
     y += 6;
@@ -205,19 +194,17 @@ async function main(){
       const hR=P("right_hip"), kR=P("right_knee"), aR=P("right_ankle");
       const hL=P("left_hip"), kL=P("left_knee"), aL=P("left_ankle");
 
-      // skala cm
+      // skala
       let scale = 1;
       if(sL && sR){
         scale = 40 / getDistance(sL, sR);
       }
 
       // ukuran
-      const handR = eR && wR ? getDistance(eR,wR)*scale : 0;
-      const handL = eL && wL ? getDistance(eL,wL)*scale : 0;
-      const legR = kR && aR ? getDistance(kR,aR)*scale : 0;
-      const legL = kL && aL ? getDistance(kL,aL)*scale : 0;
-
-      const torso = sR && hR ? getDistance(sR,hR)*scale : 0;
+      const handR = eR&&wR ? getDistance(eR,wR)*scale : 0;
+      const handL = eL&&wL ? getDistance(eL,wL)*scale : 0;
+      const legR = kR&&aR ? getDistance(kR,aR)*scale : 0;
+      const legL = kL&&aL ? getDistance(kL,aL)*scale : 0;
 
       // sudut
       const angleER = sR&&eR&&wR ? getAngle(sR,eR,wR) : 0;
@@ -225,35 +212,23 @@ async function main(){
       const angleKR = hR&&kR&&aR ? getAngle(hR,kR,aR) : 0;
       const angleKL = hL&&kL&&aL ? getAngle(hL,kL,aL) : 0;
 
-      // kemiringan
-      let tilt = 0;
-      if(sL && sR){
-        tilt = Math.atan2(sR.y - sL.y, sR.x - sL.x) * 180/Math.PI;
-      }
+      // ================= LABEL DI SKELETON =================
+      ctx.fillStyle="yellow";
+      ctx.font="12px monospace";
 
-      // TEXT DI CANVAS (INI MASUK KE SCREENSHOT 🔥)
-      ctx.fillStyle="white";
-      ctx.font="14px monospace";
+      if(eR) ctx.fillText(angleER.toFixed(1)+"°", canvas.width-eR.x, eR.y-10);
+      if(eL) ctx.fillText(angleEL.toFixed(1)+"°", canvas.width-eL.x, eL.y-10);
+      if(kR) ctx.fillText(angleKR.toFixed(1)+"°", canvas.width-kR.x, kR.y-10);
+      if(kL) ctx.fillText(angleKL.toFixed(1)+"°", canvas.width-kL.x, kL.y-10);
 
-      let y = 20;
-      function t(txt){ ctx.fillText(txt,20,y); y+=18;}
+      if(wR) ctx.fillText(handR.toFixed(1)+"cm", canvas.width-wR.x, wR.y+15);
+      if(wL) ctx.fillText(handL.toFixed(1)+"cm", canvas.width-wL.x, wL.y+15);
+      if(aR) ctx.fillText(legR.toFixed(1)+"cm", canvas.width-aR.x, aR.y+15);
+      if(aL) ctx.fillText(legL.toFixed(1)+"cm", canvas.width-aL.x, aL.y+15);
 
-      t("=== GARBHA ANALYSIS ===");
-      t(`Tangan Kanan: ${handR.toFixed(1)} cm`);
-      t(`Tangan Kiri : ${handL.toFixed(1)} cm`);
-      t(`Siku Kanan: ${angleER.toFixed(1)}°`);
-      t(`Siku Kiri : ${angleEL.toFixed(1)}°`);
-      t(`Kaki Kanan: ${legR.toFixed(1)} cm`);
-      t(`Kaki Kiri : ${legL.toFixed(1)} cm`);
-      t(`Lutut Kanan: ${angleKR.toFixed(1)}°`);
-      t(`Lutut Kiri : ${angleKL.toFixed(1)}°`);
-      t(`Torso: ${torso.toFixed(1)} cm`);
-      t(`Kemiringan: ${tilt.toFixed(1)}°`);
-
-      // simpan data
+      // simpan
       records.push({handR,handL,legR,legL});
 
-      // simpan frame
       lastFrameImage = canvas.toDataURL("image/jpeg",0.9);
 
     });
