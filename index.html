@@ -5,6 +5,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.13.0"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf"></script>
 
   <style>
     body{margin:0; overflow:hidden; background:black;}
@@ -33,8 +34,9 @@
       border-radius:8px;
       cursor:pointer;
     }
-    #startBtn{left:40%;}
-    #exportBtn{left:55%;}
+    #startBtn{left:35%;}
+    #pdfBtn{left:50%;}
+    #shotBtn{left:65%;}
   </style>
 </head>
 
@@ -43,37 +45,23 @@
 <video id="video" autoplay playsinline muted></video>
 <canvas id="canvas"></canvas>
 <div id="hud">Loading...</div>
+
 <button id="startBtn">START</button>
-<button id="exportBtn">EXPORT</button>
+<button id="pdfBtn">EXPORT PDF</button>
+<button id="shotBtn">SCREENSHOT</button>
 
 <script>
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const hud = document.getElementById('hud');
+
 const startBtn = document.getElementById('startBtn');
-const exportBtn = document.getElementById('exportBtn');
+const pdfBtn = document.getElementById('pdfBtn');
+const shotBtn = document.getElementById('shotBtn');
 
 let detector;
-
-// ================= STABILIZER =================
-let smoothData = {};
-let bufferData = {};
-
-function smooth(name, value){
-  if(!smoothData[name]) smoothData[name] = value;
-  smoothData[name] = smoothData[name]*0.6 + value*0.4;
-  return smoothData[name];
-}
-
-function buffer(name, value){
-  if(!bufferData[name]) bufferData[name] = [];
-  bufferData[name].push(value);
-  if(bufferData[name].length > 5) bufferData[name].shift();
-
-  let avg = bufferData[name].reduce((a,b)=>a+b,0)/bufferData[name].length;
-  return avg;
-}
+let records = [];
 
 // ================= CAMERA =================
 async function setupCamera(){
@@ -82,69 +70,52 @@ async function setupCamera(){
   });
   video.srcObject = stream;
   return new Promise(r=>{
-    video.onloadedmetadata=()=>{
-      video.play();
-      r();
-    }
+    video.onloadedmetadata=()=>{ video.play(); r(); }
   });
 }
 
 // ================= MATH =================
-function getDistance(a,b){
-  return Math.hypot(a.x-b.x, a.y-b.y);
-}
-
 function getAngle(A,B,C){
   const AB = {x:A.x-B.x, y:A.y-B.y};
   const CB = {x:C.x-B.x, y:C.y-B.y};
-
   const dot = AB.x*CB.x + AB.y*CB.y;
   const magAB = Math.hypot(AB.x,AB.y);
   const magCB = Math.hypot(CB.x,CB.y);
-
   return Math.acos(dot/(magAB*magCB)) * 180/Math.PI;
 }
 
-// ================= DRAW =================
-function drawLine(a,b){
-  ctx.beginPath();
-  ctx.moveTo(canvas.width-a.x,a.y);
-  ctx.lineTo(canvas.width-b.x,b.y);
-  ctx.strokeStyle="cyan";
-  ctx.lineWidth=3;
-  ctx.stroke();
-}
+// ================= SCREENSHOT =================
+shotBtn.onclick = ()=>{
+  const img = canvas.toDataURL("image/jpeg");
+  const a = document.createElement("a");
+  a.href = img;
+  a.download = "garbha_screenshot.jpg";
+  a.click();
+};
 
-function drawPoint(p){
-  ctx.beginPath();
-  ctx.arc(canvas.width-p.x,p.y,5,0,Math.PI*2);
-  ctx.fillStyle="blue";
-  ctx.fill();
-  ctx.strokeStyle="white";
-  ctx.stroke();
-}
+// ================= PDF EXPORT =================
+pdfBtn.onclick = ()=>{
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
 
-// ================= EXPORT =================
-let records = [];
+  doc.setFontSize(12);
+  doc.text("GARBHA MOTION ANALYSIS REPORT", 10, 10);
 
-function saveData(data){
-  records.push(data);
-}
+  let y = 20;
 
-exportBtn.onclick = ()=>{
-  let csv = "time,elbowR,elbowL,kneeR,kneeL\n";
-
-  records.forEach(r=>{
-    csv += `${r.time},${r.elbowR},${r.elbowL},${r.kneeR},${r.kneeL}\n`;
+  records.slice(-20).forEach(r=>{
+    doc.text(
+      `t:${r.time} | ER:${r.elbowR.toFixed(1)} EL:${r.elbowL.toFixed(1)} KR:${r.kneeR.toFixed(1)} KL:${r.kneeL.toFixed(1)}`,
+      10, y
+    );
+    y += 6;
   });
 
-  const blob = new Blob([csv], {type:"text/csv"});
-  const url = URL.createObjectURL(blob);
+  // tambahkan gambar terakhir
+  const img = canvas.toDataURL("image/jpeg", 0.8);
+  doc.addImage(img, "JPEG", 10, y+5, 180, 100);
 
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "garbha_motion_data.csv";
-  a.click();
+  doc.save("garbha_report.pdf");
 };
 
 // ================= MAIN =================
@@ -172,99 +143,56 @@ async function main(){
     detector.estimatePoses(video).then(poses=>{
 
       if(!poses.length) return;
-
       const pose = poses[0];
 
       function P(name){
         return pose.keypoints.find(k=>k.name===name && k.score>0.4);
       }
 
-      const kp = pose.keypoints;
-
-      // FULL BODY
-      const pairs = [
-        ["left_shoulder","right_shoulder"],
-        ["left_shoulder","left_elbow"],
-        ["left_elbow","left_wrist"],
-        ["right_shoulder","right_elbow"],
-        ["right_elbow","right_wrist"],
-        ["left_hip","right_hip"],
-        ["left_shoulder","left_hip"],
-        ["right_shoulder","right_hip"],
-        ["left_hip","left_knee"],
-        ["left_knee","left_ankle"],
-        ["right_hip","right_knee"],
-        ["right_knee","right_ankle"]
-      ];
-
-      pairs.forEach(([a,b])=>{
-        const p1 = P(a);
-        const p2 = P(b);
-        if(p1 && p2) drawLine(p1,p2);
-      });
-
-      kp.forEach(p=>{
-        if(p.score>0.4) drawPoint(p);
-      });
-
-      // ANGLES
-      const elbowR = P("right_elbow");
       const shoulderR = P("right_shoulder");
+      const elbowR = P("right_elbow");
       const wristR = P("right_wrist");
 
-      const elbowL = P("left_elbow");
       const shoulderL = P("left_shoulder");
+      const elbowL = P("left_elbow");
       const wristL = P("left_wrist");
 
-      const kneeR = P("right_knee");
       const hipR = P("right_hip");
+      const kneeR = P("right_knee");
       const ankleR = P("right_ankle");
 
-      const kneeL = P("left_knee");
       const hipL = P("left_hip");
+      const kneeL = P("left_knee");
       const ankleL = P("left_ankle");
 
-      let angleER=0, angleEL=0, angleKR=0, angleKL=0;
+      let ER=0, EL=0, KR=0, KL=0;
 
       if(shoulderR && elbowR && wristR){
-        angleER = buffer("ER", smooth("ER", getAngle(shoulderR, elbowR, wristR)));
+        ER = getAngle(shoulderR, elbowR, wristR);
       }
-
       if(shoulderL && elbowL && wristL){
-        angleEL = buffer("EL", smooth("EL", getAngle(shoulderL, elbowL, wristL)));
+        EL = getAngle(shoulderL, elbowL, wristL);
       }
-
       if(hipR && kneeR && ankleR){
-        angleKR = buffer("KR", smooth("KR", getAngle(hipR, kneeR, ankleR)));
+        KR = getAngle(hipR, kneeR, ankleR);
       }
-
       if(hipL && kneeL && ankleL){
-        angleKL = buffer("KL", smooth("KL", getAngle(hipL, kneeL, ankleL)));
+        KL = getAngle(hipL, kneeL, ankleL);
       }
 
-      // DISPLAY
-      ctx.fillStyle="yellow";
-      ctx.font="14px monospace";
-
-      if(elbowR) ctx.fillText(angleER.toFixed(1)+"°", canvas.width-elbowR.x, elbowR.y);
-      if(elbowL) ctx.fillText(angleEL.toFixed(1)+"°", canvas.width-elbowL.x, elbowL.y);
-      if(kneeR) ctx.fillText(angleKR.toFixed(1)+"°", canvas.width-kneeR.x, kneeR.y);
-      if(kneeL) ctx.fillText(angleKL.toFixed(1)+"°", canvas.width-kneeL.x, kneeL.y);
-
-      // SAVE DATA
-      saveData({
+      records.push({
         time: Date.now(),
-        elbowR: angleER,
-        elbowL: angleEL,
-        kneeR: angleKR,
-        kneeL: angleKL
+        elbowR: ER,
+        elbowL: EL,
+        kneeR: KR,
+        kneeL: KL
       });
 
       hud.innerHTML = `
-        ER: ${angleER.toFixed(1)}°<br>
-        EL: ${angleEL.toFixed(1)}°<br>
-        KR: ${angleKR.toFixed(1)}°<br>
-        KL: ${angleKL.toFixed(1)}°
+        ER:${ER.toFixed(1)}°<br>
+        EL:${EL.toFixed(1)}°<br>
+        KR:${KR.toFixed(1)}°<br>
+        KL:${KL.toFixed(1)}°
       `;
 
     });
@@ -278,7 +206,7 @@ async function main(){
 startBtn.onclick = ()=>{
   startBtn.style.display="none";
   main();
-}
+};
 </script>
 
 </body>
