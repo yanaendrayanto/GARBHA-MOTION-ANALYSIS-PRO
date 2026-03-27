@@ -54,7 +54,7 @@ let detector;
 let records = [];
 let lastFrameImage = null;
 
-// 🔥 LAST VALID DATA (ANTI 0)
+// 🔥 ANTI 0 DATA
 let lastValid = {
   handR:0, handL:0,
   legR:0, legL:0,
@@ -115,7 +115,7 @@ shotBtn.onclick = ()=>{
   a.click();
 };
 
-// PDF (FIXED)
+// PDF FIX
 pdfBtn.onclick = ()=>{
   if(!lastFrameImage) return alert("Belum ada data");
 
@@ -127,30 +127,15 @@ pdfBtn.onclick = ()=>{
   let y = 20;
 
   records.slice(-10).forEach(r=>{
-
-    doc.text(
-      `Tangan R: ${r.handR.toFixed(1)} cm | Tangan L: ${r.handL.toFixed(1)} cm`,
-      10, y
-    ); y+=6;
-
-    doc.text(
-      `Siku R: ${r.angleER.toFixed(1)}° | Siku L: ${r.angleEL.toFixed(1)}°`,
-      10, y
-    ); y+=6;
-
-    doc.text(
-      `Kaki R: ${r.legR.toFixed(1)} cm | Kaki L: ${r.legL.toFixed(1)} cm`,
-      10, y
-    ); y+=6;
-
-    doc.text(
-      `Lutut R: ${r.angleKR.toFixed(1)}° | Lutut L: ${r.angleKL.toFixed(1)}°`,
-      10, y
-    ); y+=10;
-
+    doc.text(`Tangan R: ${r.handR.toFixed(1)} cm | Tangan L: ${r.handL.toFixed(1)} cm`,10,y); y+=6;
+    doc.text(`Siku R: ${r.angleER.toFixed(1)}° | Siku L: ${r.angleEL.toFixed(1)}°`,10,y); y+=6;
+    doc.text(`Kaki R: ${r.legR.toFixed(1)} cm | Kaki L: ${r.legL.toFixed(1)} cm`,10,y); y+=6;
+    doc.text(`Lutut R: ${r.angleKR.toFixed(1)}° | Lutut L: ${r.angleKL.toFixed(1)}°`,10,y); y+=10;
   });
 
+  // 🔥 posisi gambar FIX
   doc.addImage(lastFrameImage, "JPEG", 10, y, 180, 100);
+
   doc.save("garbha_report.pdf");
 };
 
@@ -213,7 +198,6 @@ async function main(){
         if(p.score>0.4) drawPoint(p);
       });
 
-      // ambil titik
       const sR=P("right_shoulder"), eR=P("right_elbow"), wR=P("right_wrist");
       const sL=P("left_shoulder"), eL=P("left_elbow"), wL=P("left_wrist");
       const hR=P("right_hip"), kR=P("right_knee"), aR=P("right_ankle");
@@ -234,7 +218,7 @@ async function main(){
       let angleKR = hR&&kR&&aR ? getAngle(hR,kR,aR) : 0;
       let angleKL = hL&&kL&&aL ? getAngle(hL,kL,aL) : 0;
 
-      // 🔥 SIMPAN DATA TERAKHIR (ANTI 0)
+      // stabil
       if(handR>0) lastValid.handR = handR;
       if(handL>0) lastValid.handL = handL;
       if(legR>0) lastValid.legR = legR;
@@ -245,7 +229,6 @@ async function main(){
       if(angleKR>0) lastValid.angleKR = angleKR;
       if(angleKL>0) lastValid.angleKL = angleKL;
 
-      // gunakan data stabil
       handR = lastValid.handR;
       handL = lastValid.handL;
       legR = lastValid.legR;
@@ -256,12 +239,36 @@ async function main(){
       angleKR = lastValid.angleKR;
       angleKL = lastValid.angleKL;
 
-      // simpan
-      records.push({
-        handR,handL,legR,legL,
-        angleER,angleEL,angleKR,angleKL
-      });
+      // 🔥 LABEL SKELETON BALIK
+      ctx.fillStyle="yellow";
+      ctx.font="12px monospace";
 
+      if(eR) ctx.fillText(angleER.toFixed(1)+"°", canvas.width-eR.x, eR.y-10);
+      if(eL) ctx.fillText(angleEL.toFixed(1)+"°", canvas.width-eL.x, eL.y-10);
+      if(kR) ctx.fillText(angleKR.toFixed(1)+"°", canvas.width-kR.x, kR.y-10);
+      if(kL) ctx.fillText(angleKL.toFixed(1)+"°", canvas.width-kL.x, kL.y-10);
+
+      if(wR) ctx.fillText(handR.toFixed(1)+"cm", canvas.width-wR.x, wR.y+15);
+      if(wL) ctx.fillText(handL.toFixed(1)+"cm", canvas.width-wL.x, wL.y+15);
+
+      // 🔥 HUD BALIK
+      ctx.fillStyle="white";
+      ctx.font="14px monospace";
+
+      let yHUD = 20;
+      function HUD(t){ ctx.fillText(t,20,yHUD); yHUD+=18; }
+
+      HUD("=== GARBHA ANALYSIS ===");
+      HUD(`Tangan Kanan: ${handR.toFixed(1)} cm`);
+      HUD(`Tangan Kiri : ${handL.toFixed(1)} cm`);
+      HUD(`Siku Kanan: ${angleER.toFixed(1)}°`);
+      HUD(`Siku Kiri : ${angleEL.toFixed(1)}°`);
+      HUD(`Kaki Kanan: ${legR.toFixed(1)} cm`);
+      HUD(`Kaki Kiri : ${legL.toFixed(1)} cm`);
+      HUD(`Lutut Kanan: ${angleKR.toFixed(1)}°`);
+      HUD(`Lutut Kiri : ${angleKL.toFixed(1)}°`);
+
+      records.push({handR,handL,legR,legL,angleER,angleEL,angleKR,angleKL});
       lastFrameImage = canvas.toDataURL("image/jpeg",0.9);
 
     });
