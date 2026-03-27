@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>GARBHA MOTION ANALYSIS PRO+</title>
+  <title>GARBHA MOTION ANALYSIS PRO MAX</title>
 
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.13.0"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
@@ -27,14 +27,14 @@
     button{
       position:fixed;
       bottom:20px;
-      left:50%;
-      transform:translateX(-50%);
       padding:10px 20px;
       background:#00ffff;
       border:none;
       border-radius:8px;
       cursor:pointer;
     }
+    #startBtn{left:40%;}
+    #exportBtn{left:55%;}
   </style>
 </head>
 
@@ -44,6 +44,7 @@
 <canvas id="canvas"></canvas>
 <div id="hud">Loading...</div>
 <button id="startBtn">START</button>
+<button id="exportBtn">EXPORT</button>
 
 <script>
 const video = document.getElementById('video');
@@ -51,16 +52,27 @@ const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const hud = document.getElementById('hud');
 const startBtn = document.getElementById('startBtn');
+const exportBtn = document.getElementById('exportBtn');
 
 let detector;
 
 // ================= STABILIZER =================
 let smoothData = {};
+let bufferData = {};
 
 function smooth(name, value){
   if(!smoothData[name]) smoothData[name] = value;
-  smoothData[name] = smoothData[name] * 0.7 + value * 0.3;
+  smoothData[name] = smoothData[name]*0.6 + value*0.4;
   return smoothData[name];
+}
+
+function buffer(name, value){
+  if(!bufferData[name]) bufferData[name] = [];
+  bufferData[name].push(value);
+  if(bufferData[name].length > 5) bufferData[name].shift();
+
+  let avg = bufferData[name].reduce((a,b)=>a+b,0)/bufferData[name].length;
+  return avg;
 }
 
 // ================= CAMERA =================
@@ -112,6 +124,29 @@ function drawPoint(p){
   ctx.stroke();
 }
 
+// ================= EXPORT =================
+let records = [];
+
+function saveData(data){
+  records.push(data);
+}
+
+exportBtn.onclick = ()=>{
+  let csv = "time,elbowR,elbowL,kneeR,kneeL\n";
+
+  records.forEach(r=>{
+    csv += `${r.time},${r.elbowR},${r.elbowL},${r.kneeR},${r.kneeL}\n`;
+  });
+
+  const blob = new Blob([csv], {type:"text/csv"});
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "garbha_motion_data.csv";
+  a.click();
+};
+
 // ================= MAIN =================
 async function main(){
 
@@ -146,17 +181,16 @@ async function main(){
 
       const kp = pose.keypoints;
 
-      // ================= FULL BODY CONNECTION =================
+      // FULL BODY
       const pairs = [
-        ["nose","left_eye"],["nose","right_eye"],
         ["left_shoulder","right_shoulder"],
         ["left_shoulder","left_elbow"],
         ["left_elbow","left_wrist"],
         ["right_shoulder","right_elbow"],
         ["right_elbow","right_wrist"],
+        ["left_hip","right_hip"],
         ["left_shoulder","left_hip"],
         ["right_shoulder","right_hip"],
-        ["left_hip","right_hip"],
         ["left_hip","left_knee"],
         ["left_knee","left_ankle"],
         ["right_hip","right_knee"],
@@ -169,51 +203,69 @@ async function main(){
         if(p1 && p2) drawLine(p1,p2);
       });
 
-      // ================= DRAW POINTS =================
       kp.forEach(p=>{
         if(p.score>0.4) drawPoint(p);
       });
 
-      // ================= ANGLE STABLE =================
-      let info = "";
+      // ANGLES
+      const elbowR = P("right_elbow");
+      const shoulderR = P("right_shoulder");
+      const wristR = P("right_wrist");
 
-      const shoulder = P("right_shoulder");
-      const elbow = P("right_elbow");
-      const wrist = P("right_wrist");
+      const elbowL = P("left_elbow");
+      const shoulderL = P("left_shoulder");
+      const wristL = P("left_wrist");
 
-      if(shoulder && elbow && wrist){
-        let angle = getAngle(shoulder, elbow, wrist);
-        angle = smooth("elbowAngle", angle);
+      const kneeR = P("right_knee");
+      const hipR = P("right_hip");
+      const ankleR = P("right_ankle");
 
-        ctx.fillStyle="yellow";
-        ctx.font="16px monospace";
-        ctx.fillText(angle.toFixed(1)+"°", canvas.width-elbow.x, elbow.y);
+      const kneeL = P("left_knee");
+      const hipL = P("left_hip");
+      const ankleL = P("left_ankle");
 
-        info += "Elbow: "+angle.toFixed(1)+"°<br>";
+      let angleER=0, angleEL=0, angleKR=0, angleKL=0;
+
+      if(shoulderR && elbowR && wristR){
+        angleER = buffer("ER", smooth("ER", getAngle(shoulderR, elbowR, wristR)));
       }
 
-      // ================= CM STABLE =================
-      const sL = P("left_shoulder");
-      const sR = P("right_shoulder");
-
-      if(sL && sR && elbow && wrist){
-        let pixel = getDistance(sL, sR);
-        pixel = smooth("shoulderWidth", pixel);
-
-        const scale = 40 / pixel;
-
-        let dist = getDistance(elbow, wrist);
-        dist = smooth("forearmDist", dist);
-
-        const cm = dist * scale;
-
-        ctx.fillStyle="cyan";
-        ctx.fillText(cm.toFixed(1)+" cm", canvas.width-wrist.x, wrist.y+15);
-
-        info += "Forearm: "+cm.toFixed(1)+" cm<br>";
+      if(shoulderL && elbowL && wristL){
+        angleEL = buffer("EL", smooth("EL", getAngle(shoulderL, elbowL, wristL)));
       }
 
-      hud.innerHTML = info;
+      if(hipR && kneeR && ankleR){
+        angleKR = buffer("KR", smooth("KR", getAngle(hipR, kneeR, ankleR)));
+      }
+
+      if(hipL && kneeL && ankleL){
+        angleKL = buffer("KL", smooth("KL", getAngle(hipL, kneeL, ankleL)));
+      }
+
+      // DISPLAY
+      ctx.fillStyle="yellow";
+      ctx.font="14px monospace";
+
+      if(elbowR) ctx.fillText(angleER.toFixed(1)+"°", canvas.width-elbowR.x, elbowR.y);
+      if(elbowL) ctx.fillText(angleEL.toFixed(1)+"°", canvas.width-elbowL.x, elbowL.y);
+      if(kneeR) ctx.fillText(angleKR.toFixed(1)+"°", canvas.width-kneeR.x, kneeR.y);
+      if(kneeL) ctx.fillText(angleKL.toFixed(1)+"°", canvas.width-kneeL.x, kneeL.y);
+
+      // SAVE DATA
+      saveData({
+        time: Date.now(),
+        elbowR: angleER,
+        elbowL: angleEL,
+        kneeR: angleKR,
+        kneeL: angleKL
+      });
+
+      hud.innerHTML = `
+        ER: ${angleER.toFixed(1)}°<br>
+        EL: ${angleEL.toFixed(1)}°<br>
+        KR: ${angleKR.toFixed(1)}°<br>
+        KL: ${angleKL.toFixed(1)}°
+      `;
 
     });
 
