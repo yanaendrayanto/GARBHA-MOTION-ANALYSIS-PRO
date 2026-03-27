@@ -158,6 +158,32 @@ async function main(){
 
       if(!poses.length) return;
       const pose = poses[0];
+      // ================= SKELETON =================
+const pairs = [
+  ["left_shoulder","right_shoulder"],
+  ["left_shoulder","left_elbow"],
+  ["left_elbow","left_wrist"],
+  ["right_shoulder","right_elbow"],
+  ["right_elbow","right_wrist"],
+  ["left_hip","right_hip"],
+  ["left_shoulder","left_hip"],
+  ["right_shoulder","right_hip"],
+  ["left_hip","left_knee"],
+  ["left_knee","left_ankle"],
+  ["right_hip","right_knee"],
+  ["right_knee","right_ankle"]
+];
+
+pairs.forEach(([a,b])=>{
+  const p1 = P(a);
+  const p2 = P(b);
+  if(p1 && p2) drawLine(p1,p2);
+});
+
+// titik
+pose.keypoints.forEach(p=>{
+  if(p.score>0.4) drawPoint(p);
+});
 
       function P(name){
         return pose.keypoints.find(k=>k.name===name && k.score>0.4);
@@ -206,6 +232,22 @@ async function main(){
         tiltBody = Math.atan2(mh.y-ms.y,mh.x-ms.x)*180/Math.PI;
       }
 
+      // ================= LABEL DI SKELETON =================
+ctx.fillStyle="yellow";
+ctx.font="12px monospace";
+
+// sudut
+if(eR) ctx.fillText(angleER.toFixed(1)+"°", canvas.width-eR.x, eR.y-10);
+if(eL) ctx.fillText(angleEL.toFixed(1)+"°", canvas.width-eL.x, eL.y-10);
+if(kR) ctx.fillText(angleKR.toFixed(1)+"°", canvas.width-kR.x, kR.y-10);
+if(kL) ctx.fillText(angleKL.toFixed(1)+"°", canvas.width-kL.x, kL.y-10);
+
+// ukuran
+if(wR) ctx.fillText(handR.toFixed(1)+"cm", canvas.width-wR.x, wR.y+15);
+if(wL) ctx.fillText(handL.toFixed(1)+"cm", canvas.width-wL.x, wL.y+15);
+if(aR) ctx.fillText(legR.toFixed(1)+"cm", canvas.width-aR.x, aR.y+15);
+if(aL) ctx.fillText(legL.toFixed(1)+"cm", canvas.width-aL.x, aL.y+15);
+      
       // ================= HUD =================
       ctx.fillStyle="white";
       ctx.font="14px monospace";
