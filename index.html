@@ -89,16 +89,20 @@ function drawLine(a,b){
   ctx.beginPath();
   ctx.moveTo(canvas.width-a.x,a.y);
   ctx.lineTo(canvas.width-b.x,b.y);
-  ctx.strokeStyle="lime";
-  ctx.lineWidth=2;
+  ctx.strokeStyle="cyan"; // 🔵 biru
+  ctx.lineWidth=3;
   ctx.stroke();
 }
 
 function drawPoint(p){
   ctx.beginPath();
-  ctx.arc(canvas.width-p.x,p.y,4,0,Math.PI*2);
-  ctx.fillStyle="cyan";
+  ctx.arc(canvas.width-p.x,p.y,5,0,Math.PI*2);
+  ctx.fillStyle="blue";
   ctx.fill();
+
+  ctx.strokeStyle="white";
+  ctx.lineWidth=1;
+  ctx.stroke();
 }
 
 // ================= MAIN =================
@@ -133,6 +137,9 @@ async function main(){
         return pose.keypoints.find(k=>k.name===name && k.score>0.4);
       }
 
+      // ================= POINTS =================
+      const points = pose.keypoints.filter(k=>k.score>0.4);
+
       // ================= SKELETON =================
       const shoulderR = P("right_shoulder");
       const elbowR = P("right_elbow");
@@ -150,7 +157,7 @@ async function main(){
       const kneeL = P("left_knee");
       const ankleL = P("left_ankle");
 
-      // DRAW LINES
+      // ================= DRAW LINES =================
       if(shoulderR && elbowR) drawLine(shoulderR, elbowR);
       if(elbowR && wristR) drawLine(elbowR, wristR);
 
@@ -163,12 +170,18 @@ async function main(){
       if(hipL && kneeL) drawLine(hipL, kneeL);
       if(kneeL && ankleL) drawLine(kneeL, ankleL);
 
+      // ================= DRAW ALL POINTS =================
+      points.forEach(p=>{
+        drawPoint(p);
+      });
+
       // ================= ANGLE =================
       let info = "";
 
       if(shoulderR && elbowR && wristR){
         const angle = getAngle(shoulderR, elbowR, wristR);
         ctx.fillStyle="yellow";
+        ctx.font="16px monospace";
         ctx.fillText(angle.toFixed(1)+"°", canvas.width-elbowR.x, elbowR.y);
         info += "Right Elbow: "+angle.toFixed(1)+"°<br>";
       }
@@ -182,8 +195,6 @@ async function main(){
       // ================= CM ESTIMATION =================
       if(shoulderL && shoulderR){
         const pixel = getDistance(shoulderL, shoulderR);
-
-        // asumsi lebar bahu = 40 cm
         const scale = 40 / pixel;
 
         if(elbowR && wristR){
