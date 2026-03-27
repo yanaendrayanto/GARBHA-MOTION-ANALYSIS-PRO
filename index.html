@@ -54,6 +54,14 @@ let detector;
 let records = [];
 let lastFrameImage = null;
 
+// 🔥 LAST VALID DATA (ANTI 0)
+let lastValid = {
+  handR:0, handL:0,
+  legR:0, legL:0,
+  angleER:0, angleEL:0,
+  angleKR:0, angleKL:0
+};
+
 // CAMERA
 async function setupCamera(){
   const stream = await navigator.mediaDevices.getUserMedia({
@@ -107,7 +115,7 @@ shotBtn.onclick = ()=>{
   a.click();
 };
 
-// PDF
+// PDF (FIXED)
 pdfBtn.onclick = ()=>{
   if(!lastFrameImage) return alert("Belum ada data");
 
@@ -117,15 +125,32 @@ pdfBtn.onclick = ()=>{
   doc.text("GARBHA MOTION REPORT", 10, 10);
 
   let y = 20;
+
   records.slice(-10).forEach(r=>{
+
     doc.text(
-      `TR:${r.handR.toFixed(1)} TL:${r.handL.toFixed(1)} KR:${r.legR.toFixed(1)} KL:${r.legL.toFixed(1)}`,
+      `Tangan R: ${r.handR.toFixed(1)} cm | Tangan L: ${r.handL.toFixed(1)} cm`,
       10, y
-    );
-    y += 6;
+    ); y+=6;
+
+    doc.text(
+      `Siku R: ${r.angleER.toFixed(1)}° | Siku L: ${r.angleEL.toFixed(1)}°`,
+      10, y
+    ); y+=6;
+
+    doc.text(
+      `Kaki R: ${r.legR.toFixed(1)} cm | Kaki L: ${r.legL.toFixed(1)} cm`,
+      10, y
+    ); y+=6;
+
+    doc.text(
+      `Lutut R: ${r.angleKR.toFixed(1)}° | Lutut L: ${r.angleKL.toFixed(1)}°`,
+      10, y
+    ); y+=10;
+
   });
 
-  doc.addImage(lastFrameImage, "JPEG", 10, y+5, 180, 100);
+  doc.addImage(lastFrameImage, "JPEG", 10, y, 180, 100);
   doc.save("garbha_report.pdf");
 };
 
@@ -199,57 +224,44 @@ async function main(){
         scale = 40 / getDistance(sL, sR);
       }
 
-      const handR = eR&&wR ? getDistance(eR,wR)*scale : 0;
-      const handL = eL&&wL ? getDistance(eL,wL)*scale : 0;
-      const legR = kR&&aR ? getDistance(kR,aR)*scale : 0;
-      const legL = kL&&aL ? getDistance(kL,aL)*scale : 0;
+      let handR = eR&&wR ? getDistance(eR,wR)*scale : 0;
+      let handL = eL&&wL ? getDistance(eL,wL)*scale : 0;
+      let legR = kR&&aR ? getDistance(kR,aR)*scale : 0;
+      let legL = kL&&aL ? getDistance(kL,aL)*scale : 0;
 
-      const torso = sR&&hR ? getDistance(sR,hR)*scale : 0;
+      let angleER = sR&&eR&&wR ? getAngle(sR,eR,wR) : 0;
+      let angleEL = sL&&eL&&wL ? getAngle(sL,eL,wL) : 0;
+      let angleKR = hR&&kR&&aR ? getAngle(hR,kR,aR) : 0;
+      let angleKL = hL&&kL&&aL ? getAngle(hL,kL,aL) : 0;
 
-      const angleER = sR&&eR&&wR ? getAngle(sR,eR,wR) : 0;
-      const angleEL = sL&&eL&&wL ? getAngle(sL,eL,wL) : 0;
-      const angleKR = hR&&kR&&aR ? getAngle(hR,kR,aR) : 0;
-      const angleKL = hL&&kL&&aL ? getAngle(hL,kL,aL) : 0;
+      // 🔥 SIMPAN DATA TERAKHIR (ANTI 0)
+      if(handR>0) lastValid.handR = handR;
+      if(handL>0) lastValid.handL = handL;
+      if(legR>0) lastValid.legR = legR;
+      if(legL>0) lastValid.legL = legL;
 
-      let tilt = 0;
-      if(sL && sR){
-        tilt = Math.atan2(sR.y - sL.y, sR.x - sL.x) * 180/Math.PI;
-      }
+      if(angleER>0) lastValid.angleER = angleER;
+      if(angleEL>0) lastValid.angleEL = angleEL;
+      if(angleKR>0) lastValid.angleKR = angleKR;
+      if(angleKL>0) lastValid.angleKL = angleKL;
 
-      // LABEL SKELETON
-      ctx.fillStyle="yellow";
-      ctx.font="12px monospace";
+      // gunakan data stabil
+      handR = lastValid.handR;
+      handL = lastValid.handL;
+      legR = lastValid.legR;
+      legL = lastValid.legL;
 
-      if(eR) ctx.fillText(angleER.toFixed(1)+"°", canvas.width-eR.x, eR.y-10);
-      if(eL) ctx.fillText(angleEL.toFixed(1)+"°", canvas.width-eL.x, eL.y-10);
-      if(kR) ctx.fillText(angleKR.toFixed(1)+"°", canvas.width-kR.x, kR.y-10);
-      if(kL) ctx.fillText(angleKL.toFixed(1)+"°", canvas.width-kL.x, kL.y-10);
+      angleER = lastValid.angleER;
+      angleEL = lastValid.angleEL;
+      angleKR = lastValid.angleKR;
+      angleKL = lastValid.angleKL;
 
-      if(wR) ctx.fillText(handR.toFixed(1)+"cm", canvas.width-wR.x, wR.y+15);
-      if(wL) ctx.fillText(handL.toFixed(1)+"cm", canvas.width-wL.x, wL.y+15);
-      if(aR) ctx.fillText(legR.toFixed(1)+"cm", canvas.width-aR.x, aR.y+15);
-      if(aL) ctx.fillText(legL.toFixed(1)+"cm", canvas.width-aL.x, aL.y+15);
+      // simpan
+      records.push({
+        handR,handL,legR,legL,
+        angleER,angleEL,angleKR,angleKL
+      });
 
-      // HUD KIRI (INI YANG KEMARIN HILANG 🔥)
-      ctx.fillStyle="white";
-      ctx.font="14px monospace";
-
-      let yHUD = 20;
-      function HUD(t){ ctx.fillText(t,20,yHUD); yHUD+=18; }
-
-      HUD("=== GARBHA ANALYSIS ===");
-      HUD(`Tangan Kanan: ${handR.toFixed(1)} cm`);
-      HUD(`Tangan Kiri : ${handL.toFixed(1)} cm`);
-      HUD(`Sudut Siku Kanan: ${angleER.toFixed(1)}°`);
-      HUD(`Sudut Siku Kiri : ${angleEL.toFixed(1)}°`);
-      HUD(`Kaki Kanan: ${legR.toFixed(1)} cm`);
-      HUD(`Kaki Kiri : ${legL.toFixed(1)} cm`);
-      HUD(`Sudut Lutut Kanan: ${angleKR.toFixed(1)}°`);
-      HUD(`Sudut Lutut Kiri : ${angleKL.toFixed(1)}°`);
-      HUD(`Tinggi Torso: ${torso.toFixed(1)} cm`);
-      HUD(`Kemiringan Tubuh: ${tilt.toFixed(1)}°`);
-
-      records.push({handR,handL,legR,legL});
       lastFrameImage = canvas.toDataURL("image/jpeg",0.9);
 
     });
